@@ -14,7 +14,17 @@ data_dir = Path('data')
 raw_file = data_dir / Path('merged_swb_output__mean_seasonal_output.parquet')
 proc_file = data_dir / Path('merged_swb_output__mean_seasonal_output__w_differences.parquet')
 
+# the purpose of this chunk of code is to match up the future projection with
+# the corresponding 'historical' zonal statistic, then calculate the
+# difference between the future projected value and the simulated
+# 'historical' value for a given model, scenario, time period
+#
+# we're iterating over each line in the parquet zonal statistics file and
+# adding a 'diff' column and calculating the difference
+#
 # if we've already processed the file, skip calcs by using old version
+# this is a slow process, not really worth it to optimize. delete the old
+# version if the corresponding parquet file is updated.
 if proc_file.is_file():
     df = pd.read_parquet(proc_file)
 else:    
@@ -92,24 +102,19 @@ def update_map(huc_id):
     try:
         # Filter the GeoDataFrame for the selected HUC
         selected_huc_data = huc_data[huc_data['huc10'] == huc_id]
-        print('Original data:')
-        print(selected_huc_data)
         # Get the centroid for placing the map
         centroid = selected_huc_data.geometry.centroid.to_crs(epsg=4326)
         # Use WGS 84 (epsg:4326) as the geographic coordinate system
         # folium (i.e. leaflet.js) by default accepts values of latitude and longitude (angular units) as input;
         # we need to project the geometry to a geographic coordinate system first.
         selected_huc_data = selected_huc_data.to_crs(epsg=4326)
-        print('Reprojected data:')
+        print('Selected (reprojected) data:')
         print(selected_huc_data)
         map_center = [centroid.y.mean(), centroid.x.mean()]
         # Create a folium map
         m = folium.Map(location=map_center, zoom_start=10, tiles='OpenStreetMap')
 
         for _, r in selected_huc_data.iterrows():
-            # Without simplifying the representation of each borough,
-            # the map might not be displayed
-            # sim_geo = gpd.GeoSeries(r["geometry"]).simplify(tolerance=0.001)
             geo_j = gpd.GeoSeries(r["geometry"]).to_json()
             geo_j = folium.GeoJson(data=geo_j, style_function=lambda x: {"fillColor": "orange"})
             folium.Popup(r["name"]).add_to(geo_j)
@@ -190,13 +195,6 @@ def update_plot(huc10, swb_variable_name, season_name, diff_button):
 
     return bars1 + bars2
 
-# Create a layout for the Panel application
-# layout = pn.Column(
-#     pn.Row(zone_id_selector, swb_variable_name_selector),
-#     update_plot,
-#     update_map
-# )
-
 # Layout the dashboard
 dashboard = pn.GridSpec(sizing_mode='stretch_both', max_height=1000)
 dashboard[0, 0] = swb_variable_name_selector
@@ -209,8 +207,3 @@ dashboard[8:14,3:7] =update_map
 
 # Serve the dashboard
 dashboard.servable()
-
-
-
-# Serve the application
-#layout.servable(title='Interactive Data Exploration')
