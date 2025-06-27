@@ -17,7 +17,7 @@ A dashboard should be created that will allow for exploration of the zonal stati
 
 The 'Compare to historical' button may be selected, which will display the difference between the model output for the given scenario and timeframe and the 'historical' conditions for 1995-2014.
 
-![Dashboard - differences](images/example_dashboard_difference.png)
+![Dashboard - differences](images/example_dashboard_differences.png)
 
 
 The zonal statistics represent the mean sum/mean of various SWB model outputs for a predefined set of HUC10 units.
