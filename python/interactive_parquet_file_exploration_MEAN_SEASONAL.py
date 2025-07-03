@@ -3,6 +3,7 @@ import panel as pn
 import geopandas as gpd
 import holoviews as hv
 from holoviews import opts
+import progressbar
 from pathlib import Path
 import folium
 
@@ -13,6 +14,18 @@ data_dir = Path('data')
 
 raw_file = data_dir / Path('merged_swb_output__mean_seasonal_output.parquet')
 proc_file = data_dir / Path('merged_swb_output__mean_seasonal_output__w_differences.parquet')
+
+# Define a custom set of widgets
+widgets = [
+    'Progress: ',                                # Description text
+    progressbar.Percentage(),         # Show percentage completed
+    ' ',                              
+    progressbar.Bar(marker=':'),      # Custom bar with specified marker
+    ' ',
+    progressbar.ETA(),                    # Estimated time remaining
+    ' | ',
+    progressbar.Timer(),                  # Time elapsed
+]
 
 # the purpose of this chunk of code is to match up the future projection with
 # the corresponding 'historical' zonal statistic, then calculate the
@@ -28,8 +41,13 @@ proc_file = data_dir / Path('merged_swb_output__mean_seasonal_output__w_differen
 if proc_file.is_file():
     df = pd.read_parquet(proc_file)
 else:    
+    print("\n\nAdding a 'difference' column to the output parquet file. Please wait.\n")
     # Load the parquet file
     df = pd.read_parquet(raw_file)
+    # get number of rows in dataframe
+    num_rows = len(df.index)
+    # Initialize the progress bar with widgets
+    bar = progressbar.ProgressBar(widgets=widgets, max_value=num_rows)
     # pad HUC numbers with leading zeros
     df['huc10'] = [s.zfill(10) for s in df.zone]
     # eliminate statistics for areas outside of our set of HUCs
@@ -55,7 +73,9 @@ else:
                 & (df['scenario_name'] == 'historical')]
 
         df.at[index, 'diff'] = float(row['mean'] - hist['mean'].values[0])
-        df.to_parquet(proc_file)
+    #    df.to_parquet(proc_file)
+        bar.update(index+1)
+    df.to_parquet(proc_file)
 
 # Load the shapefile
 shapefile_path = data_dir / 'HUC_10_selections_MN_SWB.shp'
