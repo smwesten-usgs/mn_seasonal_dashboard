@@ -8,7 +8,15 @@ from pathlib import Path
 import folium
 
 # Initialize Panel extension
-pn.extension()
+pn.extension('tabulator',
+             raw_css=[
+                 """
+                 body {
+                     background-color: #e6e6e6;
+                 }
+                 """
+             ],
+)
 
 data_dir = Path('data')
 
@@ -81,6 +89,14 @@ else:
 shapefile_path = data_dir / 'HUC_10_selections_MN_SWB.shp'
 huc_data = gpd.read_file(shapefile_path)
 
+def replace_bogus_huc_with_label(huc10):
+
+    value=huc10
+    if huc10=='0000000001':
+        value="State_of_Minnesota"
+    return value
+
+
 def create_huc10_info(huc10_id):
     filtered_df = huc_data[huc_data['huc10'] == huc10_id]
     
@@ -90,6 +106,9 @@ def create_huc10_info(huc10_id):
                            
     except:
         description_txt = "no selection"
+
+    if huc10_id == '0000000001':
+        description_txt = "# State of Minnesota"        
 
     static_text = pn.pane.Markdown(description_txt, hard_line_break=True)
     return static_text
@@ -148,6 +167,62 @@ def update_map(huc_id):
         m = folium.Map(location=[42, -96], zoom_start=10, tiles="OpenStreetMap")
 
     return m
+
+@pn.depends(huc10=huc10_selector.param.value,
+            swb_variable_name=swb_variable_name_selector.param.value,
+            season_name=season_selector.param.value,            
+            diff_button=diff_button.param.value)
+def update_mid_table(huc10, swb_variable_name, season_name, diff_button):
+    filtered_df = filter_data(huc10, swb_variable_name, season_name)
+    filtered_mid_century_df =  filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2040-2059')]
+    
+    values='mean'
+    if diff_button:
+        values='diff'
+    output_filename = f"{values}_{swb_variable_name}_for_{replace_bogus_huc_with_label(huc10)}_{season_name}_2040-2059.csv"
+
+    pivot_mid_df = filtered_mid_century_df.pivot_table(
+                    index='weather_data_name',
+                    columns='scenario_name',
+                    values=values).round(2)
+
+    pivot_mid_tab = pn.widgets.Tabulator(pivot_mid_df, layout='fit_data_table', show_index=True)
+
+    filename_mid, button_mid = pivot_mid_tab.download_menu(
+                                   text_kwargs={'name': 'Enter filename', 'value': output_filename},
+                                   button_kwargs={'name': 'Download table'}
+    )
+
+    return pn.Column(pivot_mid_tab, pn.Column(filename_mid, button_mid))
+
+
+@pn.depends(huc10=huc10_selector.param.value,
+            swb_variable_name=swb_variable_name_selector.param.value,
+            season_name=season_selector.param.value,            
+            diff_button=diff_button.param.value)
+def update_late_table(huc10, swb_variable_name, season_name, diff_button):
+    filtered_df = filter_data(huc10, swb_variable_name, season_name)
+    filtered_late_century_df = filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2080-2099')]
+
+    values='mean'
+    if diff_button:
+        values='diff'
+    output_filename = f"{values}_{swb_variable_name}_for_{replace_bogus_huc_with_label(huc10)}_{season_name}_2080-2099.csv"
+
+    pivot_late_df = filtered_late_century_df.pivot_table(
+                    index='weather_data_name',
+                    columns='scenario_name',
+                    values=values).round(2)
+
+    pivot_late_tab = pn.widgets.Tabulator(pivot_late_df, layout='fit_data_table', show_index=True)
+
+    filename_late, button_late = pivot_late_tab.download_menu(
+                                   text_kwargs={'name': 'Enter filename', 'value': output_filename},
+                                   button_kwargs={'name': 'Download table'}
+    )
+
+    return pn.Column(pivot_late_tab, pn.Column(filename_late, button_late))
+
 
 # Create a function to update the plot based on the selected filters
 @pn.depends(huc10=huc10_selector.param.value,
@@ -215,15 +290,21 @@ def update_plot(huc10, swb_variable_name, season_name, diff_button):
 
     return bars1 + bars2
 
+
 # Layout the dashboard
 dashboard = pn.GridSpec(sizing_mode='stretch_both', max_height=1000)
-dashboard[0, 0] = swb_variable_name_selector
-dashboard[1, 0] = huc10_selector
-dashboard[2, 0] = season_selector
-dashboard[3, 0] = diff_button
-dashboard[0, 2:9] = update_huc10_info
-dashboard[1:7,1:9] =update_plot
-dashboard[8:14,3:7] =update_map
-
+dashboard[0, 0:2] = swb_variable_name_selector
+dashboard[1, 0:2] = huc10_selector
+dashboard[2, 0:1] = season_selector
+dashboard[3, 0:1] = diff_button
+dashboard[0, 2:20] = update_huc10_info
+dashboard[1:7,2:19] =update_plot
+dashboard[9:14,10:19] =update_map
+dashboard[9:14,0:5] =pn.Column(pn.pane.Markdown("### Mid-century projections (2040-2059)"),
+                               update_mid_table
+)
+dashboard[9:14,5:10] =pn.Column(pn.pane.Markdown("### Late-century projections (2080-2099)"),
+                               update_late_table
+)
 # Serve the dashboard
 dashboard.servable()
