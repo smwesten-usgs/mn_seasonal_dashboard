@@ -186,4 +186,3 @@ dependencies:
   - zlib=1.3.1=h2466b09_2
   - zstandard=0.23.0=py310ha8f682b_2
   - zstd=1.5.7=hbeecb71_2
-prefix: C:\Users\smwesten\AppData\Local\miniforge3\envs\dash
