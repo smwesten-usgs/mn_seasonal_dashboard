@@ -9,6 +9,7 @@ import folium
 
 # Initialize Panel extension
 pn.extension('tabulator',
+             'floatpanel',
              raw_css=[
                  """
                  body {
@@ -17,6 +18,8 @@ pn.extension('tabulator',
                  """
              ],
 )
+
+hv.extension('bokeh')
 
 data_dir = Path('data')
 
@@ -114,7 +117,7 @@ def create_huc10_info(huc10_id):
     return static_text
 
 # Create a function to filter the DataFrame based on user input
-def filter_data(huc10, swb_variable_name, season_name):
+def filter_data_by_selection(huc10, swb_variable_name, season_name):
     filtered_df = df.copy()
     
     if huc10:
@@ -173,7 +176,7 @@ def update_map(huc_id):
             season_name=season_selector.param.value,            
             diff_button=diff_button.param.value)
 def update_mid_table(huc10, swb_variable_name, season_name, diff_button):
-    filtered_df = filter_data(huc10, swb_variable_name, season_name)
+    filtered_df = filter_data_by_selection(huc10, swb_variable_name, season_name)
     filtered_mid_century_df =  filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2040-2059')]
     
     values='mean'
@@ -201,7 +204,7 @@ def update_mid_table(huc10, swb_variable_name, season_name, diff_button):
             season_name=season_selector.param.value,            
             diff_button=diff_button.param.value)
 def update_late_table(huc10, swb_variable_name, season_name, diff_button):
-    filtered_df = filter_data(huc10, swb_variable_name, season_name)
+    filtered_df = filter_data_by_selection(huc10, swb_variable_name, season_name)
     filtered_late_century_df = filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2080-2099')]
 
     values='mean'
@@ -229,11 +232,9 @@ def update_late_table(huc10, swb_variable_name, season_name, diff_button):
             swb_variable_name=swb_variable_name_selector.param.value,
             season_name=season_selector.param.value,
             diff_button=diff_button.param.value)
-def update_plot(huc10, swb_variable_name, season_name, diff_button):
-    filtered_df = filter_data(huc10, swb_variable_name, season_name)
-
+def update_mid_century_plot(huc10, swb_variable_name, season_name, diff_button):
+    filtered_df = filter_data_by_selection(huc10, swb_variable_name, season_name)
     filtered_mid_century_df = filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2040-2059')]
-    filtered_late_century_df = filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2080-2099')]
     
     grid_style = {'grid_line_color': 'black', 'grid_line_width': 1.0, # 'ygrid_bounds': (0.3, 0.7),
               'xgrid_line_color': 'lightgray', 'xgrid_line_dash': [4, 4]}
@@ -244,7 +245,6 @@ def update_plot(huc10, swb_variable_name, season_name, diff_button):
         ylabel='Mean Difference'
         # remove scenario_name of 'historical' from dataframe
         filtered_mid_century_df = filtered_mid_century_df[(filtered_mid_century_df['scenario_name']!='historical')]
-        filtered_late_century_df = filtered_late_century_df[(filtered_late_century_df['scenario_name']!='historical')]
         colormap = ['forestgreen','gold','firebrick']
     else:
         vdims='mean'
@@ -253,43 +253,88 @@ def update_plot(huc10, swb_variable_name, season_name, diff_button):
         colormap = ['royalblue','forestgreen','gold','firebrick']
 
     title_txt_mid = f"Mid-century {title_prefix} (2040-2059)"
-    title_txt_late = f"Late-century {title_prefix} (2080-2099)"
 
     # Create a grouped bar plot
-    bars1 = hv.Bars(filtered_mid_century_df, kdims=['weather_data_name','scenario_name'], vdims=[vdims]).opts(
+    bars = hv.Bars(filtered_mid_century_df, kdims=['weather_data_name','scenario_name'], vdims=[vdims]).opts(
         title=title_txt_mid,
         xlabel='Model Name',
         ylabel=ylabel,
         tools=['hover'],
-        width=900,
-        height=475,
+        width=700,
+        height=450,
         color='scenario_name',  # Use scenario_name for color differentiation
         cmap=colormap,#'Category10',  # Use a categorical color map
-        show_legend=True,
-        legend_position='right',
+        show_legend=False,
+        #legend_position='top',
         gridstyle=grid_style,
         show_grid=True,
         xrotation=45
     )
 
-    bars2 = hv.Bars(filtered_late_century_df, kdims=['weather_data_name','scenario_name'], vdims=[vdims]).opts(
+    # bars2 = hv.Bars(filtered_late_century_df, kdims=['weather_data_name','scenario_name'], vdims=[vdims]).opts(
+    #     title=title_txt_late,
+    #     xlabel='Model Name',
+    #     ylabel=ylabel,
+    #     tools=['hover'],
+    #     width=850,
+    #     height=500,
+    #     color='scenario_name',  # Use scenario_name for color differentiation
+    #     cmap=colormap,
+    #     show_legend=True,
+    #     legend_position='right',
+    #     gridstyle=grid_style,
+    #     show_grid=True,
+    #     xrotation=45
+    # )
+
+    return bars# + bars2)
+
+
+
+# Create a function to update the plot based on the selected filters
+@pn.depends(huc10=huc10_selector.param.value,
+            swb_variable_name=swb_variable_name_selector.param.value,
+            season_name=season_selector.param.value,
+            diff_button=diff_button.param.value)
+def update_late_century_plot(huc10, swb_variable_name, season_name, diff_button):
+    filtered_df = filter_data_by_selection(huc10, swb_variable_name, season_name)
+    filtered_late_century_df = filtered_df[(filtered_df['time_period']=='1995-2014') | (filtered_df['time_period']=='2080-2099')]
+    
+    grid_style = {'grid_line_color': 'black', 'grid_line_width': 1.0, # 'ygrid_bounds': (0.3, 0.7),
+              'xgrid_line_color': 'lightgray', 'xgrid_line_dash': [4, 4]}
+
+    if diff_button:
+        vdims='diff'
+        title_prefix=f"projections, compared to historical: {season_name}"
+        ylabel='Mean Difference'
+        # remove scenario_name of 'historical' from dataframe
+        filtered_late_century_df = filtered_late_century_df[(filtered_late_century_df['scenario_name']!='historical')]
+        colormap = ['forestgreen','gold','firebrick']
+    else:
+        vdims='mean'
+        title_prefix=f"projections: {season_name}"
+        ylabel='Mean Value'
+        colormap = ['royalblue','forestgreen','gold','firebrick']
+
+    title_txt_late = f"Late-century {title_prefix} (2080-2099)"
+
+    bars = hv.Bars(filtered_late_century_df, kdims=['weather_data_name','scenario_name'], vdims=[vdims]).opts(
         title=title_txt_late,
         xlabel='Model Name',
         ylabel=ylabel,
         tools=['hover'],
-        width=900,
-        height=475,
+        width=700,
+        height=450,
         color='scenario_name',  # Use scenario_name for color differentiation
         cmap=colormap,
-        show_legend=True,
-        legend_position='right',
+        show_legend=False,
+        #legend_position='right',
         gridstyle=grid_style,
         show_grid=True,
         xrotation=45
     )
 
-    return bars1 + bars2
-
+    return (bars)
 
 # Layout the dashboard
 dashboard = pn.GridSpec(sizing_mode='stretch_both', max_height=1000)
@@ -297,9 +342,12 @@ dashboard[0, 0:2] = swb_variable_name_selector
 dashboard[1, 0:2] = huc10_selector
 dashboard[2, 0:1] = season_selector
 dashboard[3, 0:1] = diff_button
-dashboard[0, 2:20] = update_huc10_info
-dashboard[1:7,2:19] =update_plot
-dashboard[9:14,10:19] =update_map
+dashboard[0, 2:21] = update_huc10_info
+dashboard[1:7,2:11] =pn.Column(update_mid_century_plot,
+                               sizing_mode='stretch_both')
+dashboard[1:7,11:20] =pn.Column(update_late_century_plot,
+                               sizing_mode='stretch_both')
+dashboard[9:14,11:20] =update_map
 dashboard[9:14,0:5] =pn.Column(pn.pane.Markdown("### Mid-century projections (2040-2059)"),
                                update_mid_table
 )
